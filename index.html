@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>123掉了</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* 深色背景 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* 防止滚动条 */
+        }
+        canvas {
+            background-color: #2d3748; /* 画布背景色 */
+            border-radius: 1rem; /* 圆角 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* 阴影 */
+            display: block; /* 移除画布下方空白 */
+            touch-action: none; /* 禁用默认触摸行为，防止滚动 */
+        }
+        /* 游戏容器的响应式宽度 */
+        .game-container {
+            width: 60vw; /* 视口宽度的90% */
+            /*max-width: 600px; /* 最大宽度 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem; /* 元素间距 */
+            padding: 1rem;
+        }
+        /* 按钮样式 */
+        .game-button {
+            padding: 0.75rem 1.5rem;
+            background-image: linear-gradient(to right, #63b3ed, #4299e1); /* 渐变背景 */
+            color: white;
+            font-weight: bold;
+            border-radius: 0.75rem; /* 圆角 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* 阴影 */
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: none;
+            outline: none;
+        }
+        .game-button:hover {
+            transform: translateY(-2px); /* 悬停效果 */
+            box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15), 0 3px 5px -1px rgba(0, 0, 0, 0.08);
+        }
+        .game-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+        }
+        /* 消息框样式 */
+        .message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            z-index: 100;
+            display: none; /* 默认隐藏 */
+            flex-direction: column;
+            gap: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+    </head>
+
+    <body>
+        <div class="game-container">
+        <!-- 游戏信息显示 -->
+
+        <h1 class="text-4xl font-extrabold text-white mb-4">123掉了</h1>
+        <div class="w-full flex justify-between text-white text-lg font-bold p-2">
+            <div id="scoreDisplay">分数: 0</div>
+            <div id="livesDisplay">生命: 3</div>
+        </div>
+
+        <!-- 游戏画布 -->
+        <canvas id="gameCanvas" class="w-full h-[70vh]"></canvas>
+
+        <!-- 游戏控制按钮 -->
+        <button id="startButton" class="game-button">开始游戏</button>
+    </div>
+
+     <!-- 游戏结束/开始消息框 -->
+    <div id="messageBox" class="message-box">
+        <h2 id="messageTitle" class="text-3xl font-bold mb-4"></h2>
+        <p id="messageText" class="text-xl"></p>
+        <button id="restartButton" class="game-button mt-4">重新开始</button>
+    </div>
+
+    <script>
+        // 获取 canvas 元素和绘图上下文
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 获取显示元素
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const startButton = document.getElementById('startButton');
+        const messageBox = document.getElementById('messageBox');
+        const messageTitle = document.getElementById('messageTitle');
+        const messageText = document.getElementById('messageText');
+        const restartButton = document.getElementById('restartButton');
+
+        // 游戏变量
+        let score = 0;
+        let lives = 3;
+        let gameOver = true;
+        let animationFrameId;
+
+        // 篮子属性
+        const basket = {
+            width: 200,
+            height: 20,
+            x: 0, // 初始位置将在游戏开始时设置
+            y: canvas.height - 30, // 篮子底部位置
+            color: '#ecc94b' // 黄色
+        };
+
+        // 掉落数字数组
+        const fallingNumbers = [];
+        const numberSize = 60;
+        const numberColors = {
+            1: '#f56565', // 红色
+            2: '#48bb78', // 绿色
+            3: '#667eea'  // 蓝色
+        };
+
+        // 游戏速度和生成频率
+        let dropSpeed = 0.5; // 数字初始下落速度
+        let dropInterval = 1000; // 初始数字生成间隔（毫秒）
+        let lastDropTime = 0;
+
+        /**
+         * @function resizeCanvas
+         * @description 根据窗口大小调整画布尺寸和篮子位置
+         */
+        function resizeCanvas() {
+            // 设置画布的逻辑尺寸与CSS尺寸匹配
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            basket.y = canvas.height - 30; // 重新定位篮子
+            // 确保篮子在画布调整大小后仍在屏幕内
+            basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
+            if (gameOver) {
+                // 如果游戏结束，确保消息框居中
+                messageBox.style.left = '50%';
+                messageBox.style.top = '50%';
+                messageBox.style.transform = 'translate(-50%, -50%)';
+            }
+        }
+
+        /**
+         * @function drawBasket
+         * @description 绘制篮子
+         */
+        function drawBasket() {
+            ctx.fillStyle = basket.color;
+            ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+            // 绘制篮子边框，增加立体感
+            ctx.strokeStyle = '#d69e2e'; // 深黄色边框
+            ctx.lineWidth = 2;
+            ctx.strokeRect(basket.x, basket.y, basket.width, basket.height);
+        }
+
+        /**
+         * @function drawNumber
+         * @description 绘制掉落的数字
+         * @param {object} num - 掉落数字对象 { x, y, value, color }
+         */
+        function drawNumber(num) {
+            ctx.fillStyle = num.color;
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+
+            const halfSize = numberSize / 2;
+            const centerX = num.x + halfSize;
+            const centerY = num.y + halfSize;
+
+            ctx.beginPath();
+            if (num.value === 1) {
+                // 绘制圆形 (数字1)
+                ctx.arc(centerX, centerY, halfSize, 0, Math.PI * 2);
+            } else if (num.value === 2) {
+                // 绘制方形 (数字2)
+                ctx.rect(num.x, num.y, numberSize, numberSize);
+            } else if (num.value === 3) {
+                // 绘制三角形 (数字3)
+                // 等边三角形
+                const height = halfSize * Math.sqrt(3);
+                ctx.moveTo(centerX, centerY - height / 2); // 顶部顶点
+                ctx.lineTo(centerX - halfSize, centerY + height / 2); // 左下顶点
+                ctx.lineTo(centerX + halfSize, centerY + height / 2); // 右下顶点
+                ctx.closePath();
+            }
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#fff'; // 数字文本颜色
+            ctx.font = `bold ${numberSize * 0.6}px Inter`; // 数字字体大小，适应新形状
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(num.value, centerX, centerY);
+        }
+
+        /**
+         * @function generateNumber
+         * @description 生成一个新的掉落数字
+         */
+        function generateNumber() {
+            const value = Math.floor(Math.random() * 3) + 1; // 1, 2 或 3
+            const x = Math.random() * (canvas.width - numberSize);
+            const color = numberColors[value];
+            fallingNumbers.push({
+                x: x,
+                y: -numberSize, // 从画布顶部外开始
+                value: value,
+                color: color,
+                speed: dropSpeed + Math.random() * 0.5 // 略微随机速度
+            });
+        }
+
+        /**
+         * @function updateGameArea
+         * @description 更新游戏逻辑（移动数字，检查碰撞）
+         */
+        function updateGameArea() {
+            // 移动掉落的数字
+            for (let i = 0; i < fallingNumbers.length; i++) {
+                const num = fallingNumbers[i];
+                num.y += num.speed;
+
+                // 碰撞检测：数字是否被篮子接住
+                if (num.y + numberSize > basket.y &&
+                    num.x < basket.x + basket.width &&
+                    num.x + numberSize > basket.x &&
+                    num.y < basket.y + basket.height) {
+                    // 接住了！
+                    score += num.value; // 根据数字的值加分
+                    scoreDisplay.textContent = `分数: ${score}`;
+                    fallingNumbers.splice(i, 1); // 从数组中移除
+                    i--; // 调整索引
+
+                    if (score > 100) {
+                        endGame()
+                    }
+                }
+                // 数字是否掉落到屏幕底部
+                else if (num.y > canvas.height) {
+                    // 掉落了！
+                    lives--;
+                    livesDisplay.textContent = `生命: ${lives}`;
+                    fallingNumbers.splice(i, 1); // 从数组中移除
+                    i--; // 调整索引
+
+                    if (lives <= 0) {
+                        endGame();
+                    }
+                }
+            }
+
+            // 动态调整游戏难度
+            if (score > 0 && score % 50 === 0) { // 每50分增加难度
+                dropSpeed += 0.2;
+                dropInterval = Math.max(200, dropInterval - 50); // 最小间隔200ms
+            }
+        }
+
+        /**
+         * @function drawGameArea
+         * @description 绘制所有游戏元素
+         */
+        function drawGameArea() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+            drawBasket();
+            fallingNumbers.forEach(drawNumber);
+        }
+
+        /**
+         * @function gameLoop
+         * @description 游戏主循环
+         * @param {DOMHighResTimeStamp} currentTime - 当前时间戳
+         */
+        function gameLoop(currentTime) {
+            if (gameOver) {
+                return; // 游戏结束时停止循环
+            }
+
+            // 生成新数字
+            if (currentTime - lastDropTime > dropInterval) {
+                generateNumber();
+                lastDropTime = currentTime;
+            }
+
+            updateGameArea();
+            drawGameArea();
+
+            animationFrameId = requestAnimationFrame(gameLoop); // 继续循环
+        }
+
+        /**
+         * @function startGame
+         * @description 初始化并开始游戏
+         */
+        function startGame() {
+            score = 0;
+            lives = 3;
+            fallingNumbers.length = 0; // 清空掉落数字
+            dropSpeed = 2; // 重置速度
+            dropInterval = 1000; // 重置生成间隔
+            gameOver = false;
+
+            scoreDisplay.textContent = `分数: ${score}`;
+            livesDisplay.textContent = `生命: ${lives}`;
+
+            messageBox.style.display = 'none'; // 隐藏消息框
+            startButton.style.display = 'none'; // 隐藏开始按钮
+
+            // 初始篮子位置居中
+            basket.x = (canvas.width - basket.width) / 2;
+
+            lastDropTime = performance.now(); // 初始化掉落时间
+            animationFrameId = requestAnimationFrame(gameLoop); // 启动游戏循环
+        }
+
+        /**
+         * @function endGame
+         * @description 结束游戏并显示结果
+         */
+        function endGame() {
+            gameOver = true;
+            cancelAnimationFrame(animationFrameId); // 停止动画循环
+
+            if (score >= 100) {
+                messageTitle.textContent = '你赢了！';
+                messageText.textContent = `你获得了 ${score} 分！`;
+                messageBox.style.display = 'flex';
+                startButton.style.display = 'none';
+            } else {
+                messageTitle.textContent = '游戏结束！';
+                messageText.textContent = `你获得了 ${score} 分！`;
+                messageBox.style.display = 'flex'; // 显示消息框
+                startButton.style.display = 'none'; // 确保开始按钮隐藏
+            }
+        }
+
+        // --- 事件监听器 ---
+
+        // 窗口大小改变时调整画布
+        window.addEventListener('resize', resizeCanvas);
+        // 页面加载完成后进行初始化
+        window.onload = () => {
+            resizeCanvas(); // 首次加载时调整画布尺寸
+            drawBasket(); // 绘制初始篮子
+            messageTitle.textContent = '接数字游戏';
+            messageText.textContent = '用你的篮子接住掉落的1、2、3！';
+            messageBox.style.display = 'flex'; // 显示初始消息框
+            restartButton.style.display = 'none'; // 初始状态不显示重新开始按钮
+        };
+
+        // 鼠标移动事件 (桌面端)
+        canvas.addEventListener('mousemove', (e) => {
+            if (!gameOver) {
+                const rect = canvas.getBoundingClientRect();
+                // 根据鼠标在画布上的相对位置调整篮子x坐标
+                basket.x = e.clientX - rect.left - basket.width / 2;
+                // 限制篮子在画布范围内
+                basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
+            }
+        });
+
+        // 触摸移动事件 (移动端)
+        canvas.addEventListener('touchmove', (e) => {
+            if (!gameOver && e.touches.length > 0) {
+                e.preventDefault(); // 阻止滚动
+                const rect = canvas.getBoundingClientRect();
+                // 根据触摸点在画布上的相对位置调整篮子x坐标
+                basket.x = e.touches[0].clientX - rect.left - basket.width / 2;
+                // 限制篮子在画布范围内
+                basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
+            }
+        }, { passive: false }); // 使用 { passive: false } 允许 preventDefault
+
+        // 开始/重新开始按钮点击事件
+        startButton.addEventListener('click', () => {
+            startButton.style.display = 'none'; // 隐藏开始按钮
+            restartButton.style.display = 'block'; // 显示重新开始按钮
+            startGame();
+        });
+        restartButton.addEventListener('click', startGame);
+
+    </script>
+    </body>
+</html>
