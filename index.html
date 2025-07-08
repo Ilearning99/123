@@ -150,6 +150,7 @@
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
             basket.y = canvas.height - 30; // 重新定位篮子
+            basket.width = canvas.width / 2;
             // 确保篮子在画布调整大小后仍在屏幕内
             basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
             if (gameOver) {
