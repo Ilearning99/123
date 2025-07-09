@@ -84,6 +84,10 @@
             <div id="livesDisplay">生命: 3</div>
         </div>
 
+        <audio id="audioPlayer" autoplay>
+            <source src="./sound/1.wav" type="audio/wav">
+        </audio>
+
         <!-- 游戏画布 -->
         <canvas id="gameCanvas" class="w-full h-[70vh]"></canvas>
 
@@ -111,6 +115,7 @@
         const messageTitle = document.getElementById('messageTitle');
         const messageText = document.getElementById('messageText');
         const restartButton = document.getElementById('restartButton');
+        const audioPlayer = document.getElementById("audioPlayer")
 
         // 游戏变量
         let score = 0;
@@ -331,6 +336,21 @@
             basket.x = (canvas.width - basket.width) / 2;
 
             lastDropTime = performance.now(); // 初始化掉落时间
+            if (audioPlayer) {
+                const playPromise = audioPlayer.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(_ => {
+                        // Autoplay started!
+                        console.log('Audio playback started successfully.');
+                    }).catch(error => {
+                        // Autoplay was prevented.
+                        // Show a UI element to let the user manually start playback.
+                        console.error('Audio playback failed or was prevented:', error);
+                        alert('Audio autoplay was blocked by the browser. Please interact with the page to play sound.');
+                    });
+                }
+            }
+
             animationFrameId = requestAnimationFrame(gameLoop); // 启动游戏循环
         }
 
@@ -341,6 +361,8 @@
         function endGame() {
             gameOver = true;
             cancelAnimationFrame(animationFrameId); // 停止动画循环
+
+            if (audioPlayer) audioPlayer.pause();
 
             if (score >= 100) {
                 messageTitle.textContent = '你赢了！';
